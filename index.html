@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b101b" />
+  <meta name="description" content="Интерактивный 3D-просмотр строительной модели «Блок 50»" />
+  <title>Блок 50 — интерактивная 3D-модель</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b101b; --panel:#151d2b; --border:#2b3445; --text:#f2f6ff; --muted:#9aaac0; --accent:#6db8ff; --accent2:#7ee8cf; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; overflow:hidden; }
+    #viewport { position:absolute; inset:0; outline:none; }
+    canvas { display:block; width:100%; height:100%; }
+    .topbar { position:absolute; z-index:2; left:20px; right:20px; top:18px; display:flex; align-items:flex-start; justify-content:space-between; gap:14px; pointer-events:none; }
+    .brand,.stats,.tools,.help,.loading-card { background:rgba(17,24,37,.9); border:1px solid var(--border); box-shadow:0 12px 34px rgba(0,0,0,.25); backdrop-filter:blur(16px); }
+    .brand { padding:14px 18px; border-radius:16px; pointer-events:auto; max-width:450px; }
+    h1 { font-size:19px; line-height:1.25; margin:0 0 4px; letter-spacing:-.025em; }
+    .subtitle { color:var(--muted); font-size:12px; }
+    .mark { width:10px; height:10px; background:var(--accent2); border-radius:3px; display:inline-block; margin-right:7px; transform:rotate(-20deg); }
+    .stats { border-radius:12px; padding:9px 12px; color:var(--muted); font-size:12px; pointer-events:auto; text-align:right; }
+    .stats strong { color:#fff; font-weight:650; }
+    .tools { position:absolute; z-index:2; left:20px; bottom:20px; padding:10px; border-radius:16px; display:flex; flex-wrap:wrap; gap:7px; max-width:calc(100% - 40px); }
+    button { cursor:pointer; color:var(--text); background:#202b3a; border:1px solid #354256; border-radius:10px; padding:9px 12px; font:600 12px/1.25 inherit; transition:background .15s,border-color .15s; white-space:nowrap; }
+    button:hover { background:#2b3b50; border-color:#5f7a9c; }
+    button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    button.active { color:#08131e; background:var(--accent2); border-color:var(--accent2); }
+    button:disabled { cursor:not-allowed; opacity:.4; }
+    .help { position:absolute; right:20px; bottom:20px; padding:11px 14px; border-radius:12px; z-index:2; color:var(--muted); font-size:12px; max-width:290px; }
+    .help b { color:#dde8f5; }
+    #loading { position:absolute; z-index:3; inset:0; background:rgba(5,9,15,.7); display:grid; place-items:center; padding:20px; }
+    #loading[hidden] { display:none; }
+    .loading-card { border-radius:18px; padding:28px; width:min(430px,100%); }
+    .loading-card h2 { font-size:19px; margin:0 0 10px; }
+    .loading-card p { margin:0 0 18px; color:var(--muted); }
+    .progress-track { width:100%; height:9px; background:#28364b; border-radius:20px; overflow:hidden; }
+    #progress { display:block; background:linear-gradient(90deg,#4da3ff,#7ee8cf); width:0%; height:100%; transition:width .2s; border-radius:inherit; }
+    #progress-text { margin-top:10px; color:#c9d7e6; font-size:12px; }
+    #error { display:none; margin-top:14px; color:#ffb4b4; white-space:pre-line; overflow-wrap:anywhere; }
+    #error.show { display:block; }
+    @media (max-width:750px) { .topbar{left:10px;right:10px;top:10px;} .brand{padding:10px 12px;} h1{font-size:16px;} .stats{display:none;} .tools{left:10px;bottom:10px;max-width:calc(100% - 20px);} .tools button{padding:8px 10px;} .help{display:none;} }
+    @media (prefers-reduced-motion:reduce) { * { transition:none!important; } }
+  </style>
+  <script type="importmap">
+  {"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/"}}
+  </script>
+</head>
+<body>
+  <main id="viewport" aria-label="Интерактивный трёхмерный просмотр"></main>
+  <header class="topbar">
+    <section class="brand"><h1><span class="mark"></span>Блок 50</h1><div class="subtitle">Строительная 3D-модель · интерактивный просмотр</div></section>
+    <section class="stats" id="stats">Подключение к модели...</section>
+  </header>
+  <nav class="tools" aria-label="Управление моделью">
+    <button id="home" title="Вернуть исходный вид">↺ Сброс вида</button>
+    <button id="iso" title="Изометрический вид">3D</button>
+    <button id="top" title="Вид сверху">Сверху</button>
+    <button id="front" title="Вид спереди">Спереди</button>
+    <button id="grid" title="Сетка">▦ Сетка</button>
+    <button id="rotate" title="Автоматическое вращение">⟳ Вращать</button>
+    <button id="share" title="Скопировать ссылку на просмотр">↗ Ссылка</button>
+  </nav>
+  <aside class="help"><b>Мышь:</b> левая кнопка — вращение, колёсико — масштаб, правая кнопка — перемещение. На телефоне используйте жесты.</aside>
+  <div id="loading" role="status" aria-live="polite">
+    <section class="loading-card">
+      <h2 id="phase">Подготовка 3D-модели</h2>
+      <p id="hint">Загружаем модель целиком. Для крупной модели лучше использовать компьютер.</p>
+      <div class="progress-track"><span id="progress"></span></div>
+      <div id="progress-text">Подключение...</div>
+      <div id="error" role="alert"></div>
+    </section>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const $=id=>document.getElementById(id);
+    const loading=$('loading'), phase=$('phase'), hint=$('hint'), progress=$('progress'), progressText=$('progress-text'), error=$('error');
+    let camera, renderer, scene, controls, root, grid, fitDistance=100, originalCamPos=null;
+    let rendering=false, spinning=false, loaded=false;
+
+    function setPhase(t,info) { phase.textContent=t; progressText.textContent=info || ''; }
+    function fail(err) {
+      console.error(err);
+      setPhase('Не удалось открыть модель','Проверьте доступность файлов и подключение к интернету.');
+      hint.textContent='Все части модели и manifest.json должны находиться рядом с index.html в опубликованном репозитории GitHub Pages.';
+      error.textContent=(err && err.message) ? err.message : String(err);
+      error.classList.add('show');
+    }
+    function showProgress(bytes,total) {
+      const p=Math.min(100,Math.round(100*bytes/total));
+      progress.style.width=p+'%';
+      progressText.textContent=p+'% · '+(bytes/1048576).toFixed(1)+' / '+(total/1048576).toFixed(1)+' МБ';
+    }
+    function setupViewer() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color('#0b101b');
+      camera = new THREE.PerspectiveCamera(48,window.innerWidth/window.innerHeight,.1,1e8);
+      renderer = new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
+      renderer.setSize(window.innerWidth,window.innerHeight);
+      renderer.outputColorSpace=THREE.SRGBColorSpace;
+      renderer.toneMapping=THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure=1.45;
+      $('viewport').appendChild(renderer.domElement);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping=false;
+      controls.screenSpacePanning=true;
+      controls.addEventListener('change',requestRender);
+      scene.add(new THREE.HemisphereLight(0xdcefff,0x303f56,2.4));
+      const key=new THREE.DirectionalLight(0xffffff,2.4); key.position.set(140,260,110); scene.add(key);
+      const fill=new THREE.DirectionalLight(0xaac8ff,1.0); fill.position.set(-150,100,-130); scene.add(fill);
+      window.addEventListener('resize',()=>{
+        camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth,window.innerHeight); requestRender();
+      });
+    }
+    function requestRender() {
+      if(rendering || !renderer) return;
+      rendering=true;
+      requestAnimationFrame(()=>{rendering=false;renderer.render(scene,camera);});
+    }
+    function fitModel() {
+      const bounds=new THREE.Box3().setFromObject(root);
+      if(bounds.isEmpty()) throw new Error('Модель не содержит видимой геометрии.');
+      const size=bounds.getSize(new THREE.Vector3());
+      const center=bounds.getCenter(new THREE.Vector3());
+      root.position.sub(center);
+      const maxDim=Math.max(size.x,size.y,size.z,0.01);
+      const vFov=camera.fov*Math.PI/180;
+      const hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);
+      fitDistance=maxDim/(2*Math.tan(Math.min(vFov,hFov)/2))*1.8;
+      camera.near=Math.max(fitDistance/10000,0.001);
+      camera.far=Math.max(fitDistance*1000, maxDim*100);
+      camera.updateProjectionMatrix();
+      controls.minDistance=Math.max(maxDim/1000,0.001);
+      controls.maxDistance=Math.max(fitDistance*15,1);
+      grid = new THREE.GridHelper(maxDim*1.5,20,0x456077,0x27394c);
+      grid.position.y=-size.y/2;
+      grid.visible=false;
+      scene.add(grid);
+      originalCamPos=new THREE.Vector3(fitDistance*.75,fitDistance*.55,fitDistance*.8);
+      setView('iso');
+    }
+    function setView(which) {
+      if(!loaded && !root) return;
+      let v;
+      if(which==='top') v=new THREE.Vector3(.0001,fitDistance,0);
+      else if(which==='front') v=new THREE.Vector3(0,0,fitDistance);
+      else v=originalCamPos.clone();
+      camera.position.copy(v); camera.lookAt(0,0,0);
+      controls.target.set(0,0,0); controls.update(); requestRender();
+    }
+    function setupButtons(){
+      $('home').addEventListener('click',()=>setView('iso'));
+      $('iso').addEventListener('click',()=>setView('iso'));
+      $('top').addEventListener('click',()=>setView('top'));
+      $('front').addEventListener('click',()=>setView('front'));
+      $('grid').addEventListener('click',()=>{if(!grid)return;grid.visible=!grid.visible;$('grid').classList.toggle('active',grid.visible);requestRender();});
+      $('rotate').addEventListener('click',()=>{spinning=!spinning;$('rotate').classList.toggle('active',spinning);if(spinning)spin();});
+      $('share').addEventListener('click',async()=>{
+        const btn=$('share');
+        try{await navigator.clipboard.writeText(location.href);btn.textContent='✓ Скопировано';}
+        catch{window.prompt('Скопируйте ссылку:',location.href);}
+        setTimeout(()=>btn.textContent='↗ Ссылка',1800);
+      });
+    }
+    let spinningFrame=null;
+    function spin(){
+      if(!spinning || !loaded) return;
+      const theta=0.003;
+      const offset=camera.position.clone().sub(controls.target);
+      offset.applyAxisAngle(new THREE.Vector3(0,1,0),theta);
+      camera.position.copy(controls.target).add(offset);
+      camera.lookAt(controls.target);
+      controls.update(); requestRender();
+      spinningFrame=requestAnimationFrame(spin);
+    }
+
+    async function loadManifest(){
+      if(location.protocol==='file:') throw new Error('Файл нужно открывать через веб-сервер — например, GitHub Pages, а не напрямую с диска.');
+      const r=await fetch('./manifest.json',{cache:'no-cache'});
+      if(!r.ok) throw new Error('manifest.json: ошибка HTTP '+r.status);
+      const m=await r.json();
+      if(!Array.isArray(m.parts) || !m.parts.length || !m.originalBytes) throw new Error('Неверный manifest.json');
+      return m;
+    }
+
+    async function downloadAndDecompress(m){
+      if(typeof DecompressionStream==='undefined') throw new Error('Для загрузки модели нужен современный браузер с поддержкой DecompressionStream (Chrome, Edge, Firefox или Safari).');
+      let received=0;
+      const stream=new ReadableStream({
+        async start(controller){
+          try{
+            for(let i=0;i<m.parts.length;i++){
+              const part=m.parts[i];
+              const r=await fetch('./'+encodeURIComponent(part.filename),{cache:'force-cache'});
+              if(!r.ok || !r.body) throw new Error(part.filename+': ошибка HTTP '+r.status);
+              const reader=r.body.getReader();
+              let partTotal=0;
+              while(true){
+                const {done,value}=await reader.read();
+                if(done)break;
+                partTotal+=value.byteLength;
+                received+=value.byteLength;
+                controller.enqueue(value);
+                showProgress(received,m.compressedBytes);
+              }
+              if(partTotal!==part.size) throw new Error(part.filename+': неверный размер — '+partTotal+' вместо '+part.size);
+            }
+            if(received!==m.compressedBytes) throw new Error('Ошибка суммарного размера сжатой модели');
+            controller.close();
+          }catch(e){controller.error(e);}
+        }
+      });
+      const decompressed=stream.pipeThrough(new DecompressionStream('gzip'));
+      const arrayBuffer=await new Response(decompressed).arrayBuffer();
+      if(arrayBuffer.byteLength!==m.originalBytes) throw new Error('После распаковки получен неверный размер модели');
+      const magic=new TextDecoder().decode(new Uint8Array(arrayBuffer,0,4));
+      if(magic!=='glTF') throw new Error('Распакованный файл не является GLB');
+      return arrayBuffer;
+    }
+
+    async function main(){
+      try{
+        setupViewer();setupButtons();
+        const manifest=await loadManifest();
+        $('stats').innerHTML='<strong>'+manifest.meshCount.toLocaleString('ru-RU')+'</strong> объектов<br>~'+(manifest.triangleCountApprox/1000000).toFixed(1).replace('.',',')+' млн треугольников';
+        setPhase('Загрузка модели','0%');
+        const binary=await downloadAndDecompress(manifest);
+        setPhase('Построение 3D-сцены','Распаковка завершена. Подготавливаем геометрию...');
+        progress.style.width='100%';
+        await new Promise(resolve=>setTimeout(resolve,30));
+        const gltf=await new GLTFLoader().parseAsync(binary,'./');
+        root=gltf.scene;
+        scene.add(root);
+        fitModel();
+        loaded=true;
+        loading.hidden=true;
+        requestRender();
+      }catch(e){fail(e);}
+    }
+    main();
+  </script>
+</body>
+</html>

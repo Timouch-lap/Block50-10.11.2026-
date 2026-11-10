@@ -1,0 +1,53 @@
+{
+  "name": "Блок 50 (10.11.2026)",
+  "format": "glb",
+  "compression": "gzip",
+  "originalBytes": 275874468,
+  "compressedBytes": 80834857,
+  "sha256Glb": "990d8e3e84bec3343019a91c614878061f5d0ff0a7ff34fc51ae4c9d295b9c80",
+  "sha256Gzip": "f94a044084857d03824c1502315365858d549b7f898262827a185b93a370ee72",
+  "meshCount": 20843,
+  "triangleCountApprox": 8400000,
+  "parts": [
+    {
+      "filename": "model.glb.gz.part01",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part02",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part03",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part04",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part05",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part06",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part07",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part08",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part09",
+      "size": 8388608
+    },
+    {
+      "filename": "model.glb.gz.part10",
+      "size": 5337385
+    }
+  ]
+}
